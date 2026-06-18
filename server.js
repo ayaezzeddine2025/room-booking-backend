@@ -1381,6 +1381,167 @@ app.post("/feedbacks", (req, res) => {
       );
     });
   });
+})
+
+// =============================
+// PROFILE
+// =============================
+
+// Update student profile
+app.put("/profile/:id", (req, res) => {
+  const studentId = req.params.id;
+  const { full_name, username, email, phone } = req.body;
+
+  if (!full_name || !username || !email) {
+    return res.status(400).json({
+      success: false,
+      message: "Full name, username, and email are required",
+    });
+  }
+
+  const checkSql = `
+    SELECT * 
+    FROM students 
+    WHERE (username = ? OR email = ?) 
+      AND student_id != ?
+  `;
+
+  db.query(checkSql, [username, email, studentId], (checkErr, checkResult) => {
+    if (checkErr) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to check username or email",
+        error: checkErr,
+      });
+    }
+
+    if (checkResult.length > 0) {
+      return res.json({
+        success: false,
+        message: "Username or email already exists",
+      });
+    }
+
+    const updateSql = `
+      UPDATE students
+      SET full_name = ?, username = ?, email = ?, phone = ?
+      WHERE student_id = ?
+    `;
+
+    db.query(
+      updateSql,
+      [full_name, username, email, phone, studentId],
+      (updateErr) => {
+        if (updateErr) {
+          return res.status(500).json({
+            success: false,
+            message: "Failed to update profile",
+            error: updateErr,
+          });
+        }
+
+        const getStudentSql = `
+          SELECT 
+            student_id, 
+            full_name, 
+            username, 
+            email, 
+            phone, 
+            profile_image
+          FROM students
+          WHERE student_id = ?
+        `;
+
+        db.query(getStudentSql, [studentId], (getErr, getResult) => {
+          if (getErr) {
+            return res.status(500).json({
+              success: false,
+              message: "Profile updated, but fetch failed",
+              error: getErr,
+            });
+          }
+
+          if (getResult.length === 0) {
+            return res.json({
+              success: false,
+              message: "Student not found",
+            });
+          }
+
+          res.json({
+            success: true,
+            message: "Profile updated successfully",
+            user: getResult[0],
+          });
+        });
+      }
+    );
+  });
+});
+
+// Upload student profile image
+app.post("/profile/:id/profile-image", upload.single("profile_image"), (req, res) => {
+  const studentId = req.params.id;
+
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      message: "No image uploaded",
+    });
+  }
+
+  const imagePath = `uploads/${req.file.filename}`;
+
+  const updateSql = `
+    UPDATE students
+    SET profile_image = ?
+    WHERE student_id = ?
+  `;
+
+  db.query(updateSql, [imagePath, studentId], (updateErr) => {
+    if (updateErr) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to upload profile image",
+        error: updateErr,
+      });
+    }
+
+    const getStudentSql = `
+      SELECT 
+        student_id, 
+        full_name, 
+        username, 
+        email, 
+        phone, 
+        profile_image
+      FROM students
+      WHERE student_id = ?
+    `;
+
+    db.query(getStudentSql, [studentId], (getErr, getResult) => {
+      if (getErr) {
+        return res.status(500).json({
+          success: false,
+          message: "Image uploaded, but fetch failed",
+          error: getErr,
+        });
+      }
+
+      if (getResult.length === 0) {
+        return res.json({
+          success: false,
+          message: "Student not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Profile image uploaded successfully",
+        user: getResult[0],
+      });
+    });
+  });
 });
 
 // =============================
